@@ -11,17 +11,24 @@ class Singleton(type):
 class HashTable(metaclass=Singleton):
 
     # Create empty bucket list of given size
-    def __init__(self, size):
+    def __init__(self, size: int, ttl: int = 5):
         self.size = size
         self.hash_table = self.create_buckets()
+        self.ttl = ttl
         self.setup_cron()
         self.lock = Lock()
 
     def create_buckets(self):
         return [[] for _ in range(self.size)]
 
+    def get_now(self):
+        return time.time()
+    
+    def get_time_expired(self, ttl):
+        return time.time() + ttl
+    
     # Insert values into hash map
-    def set_val(self, key, val):
+    def set_val(self, key, val, ttl=None):
 
         # Get the index from the key
         # using hash function
@@ -43,11 +50,21 @@ class HashTable(metaclass=Singleton):
         # If the bucket has same key as the key to be inserted,
         # Update the key value
         # Otherwise append the new key-value pair to the bucket
+        time = self.get_now()
+
+        if not ttl:
+            ttl = self.ttl
+        time_expired = self.get_time_expired(ttl=ttl)
+
         with self.lock:
             if found_key:
-                bucket[index] = (key, val)
+                bucket[index] = (key, {"time": time,
+                                       "time_exp": time_expired,
+                                       "values": val})
             else:
-                bucket.append((key, val))
+                bucket.append((key, {"time": time,
+                                       "time_exp": time_expired,
+                                       "values": val}))
 
     # Return searched value with specific key
     def get_val(self, key):
@@ -72,7 +89,7 @@ class HashTable(metaclass=Singleton):
         # Return the value found
         # Otherwise indicate there was no record found
         if found_key:
-            return record_val
+            return record_val["values"]
         else:
             return "No record found"
 
@@ -95,22 +112,23 @@ class HashTable(metaclass=Singleton):
             if record_key == key:
                 found_key = True
                 break
+
         with self.lock:
             if found_key:
                 bucket.pop(index)
-        return
+
+        return found_key
 
     def delete_cron(self):
 
         while True:
 
-            time.sleep(5)
+            time.sleep(1)
             for i in range(self.size):
                 bucket = self.hash_table[i]
                 for index, record in enumerate(bucket):
                     record_key, record_val = record
-                
-                    if int(record_val['id']) > 5:
+                    if record_val["time_exp"] < self.get_now():
                         print(record_key)
                         with self.lock:
                             bucket.pop(index)
