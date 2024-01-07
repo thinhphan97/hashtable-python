@@ -1,5 +1,10 @@
-from threading import Thread, Lock
 import time
+from threading import Lock, Thread
+
+from pympler import asizeof
+
+from utils import convert_bytes
+
 
 class Singleton(type):
     _instances = None
@@ -63,8 +68,8 @@ class HashTable(metaclass=Singleton):
                                        "values": val})
             else:
                 bucket.append((key, {"time": time,
-                                       "time_exp": time_expired,
-                                       "values": val}))
+                                     "time_exp": time_expired,
+                                     "values": val}))
 
     # Return searched value with specific key
     def get_val(self, key):
@@ -138,6 +143,10 @@ class HashTable(metaclass=Singleton):
         t=Thread(target=self.delete_cron, name="Thread_cron_clean_hash_table")
         t.start()
     
+    def get_size(self):
+
+        return convert_bytes(asizeof.asizeof(self.hash_table))
+
     # To print the items of hash map
     def __str__(self):
         return "".join(str(item) for item in self.hash_table)
