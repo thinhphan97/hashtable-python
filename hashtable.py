@@ -20,6 +20,7 @@ class HashTable(metaclass=Singleton):
         self.size = size
         self.hash_table = self.create_buckets()
         self.ttl = ttl
+        self.break_thead = False
         self.setup_cron()
         self.lock = Lock()
 
@@ -93,10 +94,11 @@ class HashTable(metaclass=Singleton):
         # If the bucket has same key as the key being searched,
         # Return the value found
         # Otherwise indicate there was no record found
-        if found_key:
-            return record_val["values"]
-        else:
-            return "No record found"
+        with self.lock:
+            if found_key and record_val["time_exp"] > self.get_now():
+                return record_val["values"]
+            else:
+                return "No record found"
 
     # Remove a value with specific key
     def delete_val(self, key):
@@ -138,11 +140,18 @@ class HashTable(metaclass=Singleton):
                         with self.lock:
                             bucket.pop(index)
 
+            if self.break_thead:
+                break
+
     def setup_cron(self):
 
-        t=Thread(target=self.delete_cron, name="Thread_cron_clean_hash_table")
-        t.start()
-    
+        self.thread=Thread(target=self.delete_cron, name="Thread_cron_clean_hash_table")
+        self.thread.start()
+
+    def kill(self):
+        self.break_thead = True
+        self.thread.join()
+        
     def get_size(self):
 
         return convert_bytes(asizeof.asizeof(self.hash_table))
